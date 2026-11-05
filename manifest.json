@@ -1,0 +1,11 @@
+{
+  "id": "margyt.uifix",
+  "name": "UI Fix",
+  "name_ru": "Фиксы интерфейса",
+  "version": "1.1",
+  "author": "narezany",
+  "description": "Wave bar fix (full redraw), MD3 buttons, avatar clicks, hides banners.",
+  "description_ru": "Фикс волны полностью, MD3 кнопки, аватарки, скрытие плашек.",
+  "entry": "cat.narezany.margyt.uifix.UiFix",
+  "min_api": 4
+}
