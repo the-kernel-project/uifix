@@ -1,0 +1,76 @@
+name: Build MTP
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download Android SDK
+        run: |
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mkdir -p android-sdk/cmdline-tools/latest
+          mv cmdline-tools/* android-sdk/cmdline-tools/latest/
+          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+          yes | android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null
+          android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Create stub plugin-api.jar
+        run: |
+          mkdir -p stub/cat/narezany/margyt/plugin
+          cat > stub/cat/narezany/margyt/plugin/MargyPlugin.java << 'JAVA'
+          package cat.narezany.margyt.plugin;
+          import android.app.Activity;
+          public abstract class MargyPlugin {
+            public MargyApi margyt() { return null; }
+            public void onActivityCreated(Activity a) {}
+            public void onActivityResumed(Activity a) {}
+            public void onActivityPaused(Activity a) {}
+            public void onScreen(Activity a, String name) {}
+            public void onStop() {}
+          }
+          JAVA
+          cat > stub/cat/narezany/margyt/plugin/MargyApi.java << 'JAVA'
+          package cat.narezany.margyt.plugin;
+          public abstract class MargyApi {
+            public abstract void log(String msg);
+            public abstract int accentColour();
+          }
+          JAVA
+          javac -cp $ANDROID_HOME/platforms/android-34/android.jar \
+            stub/cat/narezany/margyt/plugin/MargyApi.java \
+            stub/cat/narezany/margyt/plugin/MargyPlugin.java \
+            -d stub_out
+          jar cf plugin-api.jar -C stub_out .
+
+      - name: Compile and build MTP
+        run: |
+          mkdir -p build/classes build/dex
+          mkdir -p build/src/cat/narezany/margyt/uifix
+          cp UiFix.java build/src/cat/narezany/margyt/uifix/
+          javac --release 8 \
+            -cp "$ANDROID_HOME/platforms/android-34/android.jar:plugin-api.jar" \
+            -d build/classes \
+            build/src/cat/narezany/margyt/uifix/UiFix.java
+          $ANDROID_HOME/build-tools/34.0.0/d8 --min-api 26 \
+            --lib $ANDROID_HOME/platforms/android-34/android.jar \
+            --classpath plugin-api.jar \
+            --output build/dex \
+            $(find build/classes -name '*.class')
+          cp manifest.json build/dex/
+          cd build/dex && zip -j ../../margyt.uifix.mtp manifest.json classes.dex
+
+      - name: Upload MTP
+        uses: actions/upload-artifact@v3
+        with:
+          name: margyt.uifix.mtp
+          path: margyt.uifix.mtp
